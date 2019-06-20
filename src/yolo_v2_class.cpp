@@ -43,10 +43,18 @@ int detect_image(const char *filename, bbox_t_container &container)
 
 int detect_mat(const uint8_t* data, const size_t data_length, bbox_t_container &container) {
 #ifdef OPENCV
+    return detect_mat_thresh(data, data_length, container, 0.7, 50, 40);
+#else
+    return -1;
+#endif    // OPENCV
+}
+
+int detect_mat_thresh(const uint8_t* data, const size_t data_length, bbox_t_container &container, float thresh, int frames_story, int max_dist) {
+#ifdef OPENCV
     std::vector<char> vdata(data, data + data_length);
     cv::Mat image = imdecode(cv::Mat(vdata), 1);
 
-    std::vector<bbox_t> detection = detector->detect(image);
+    std::vector<bbox_t> detection = detector->detect(image, thresh, false, frames_story, max_dist);
     for (size_t i = 0; i < detection.size() && i < C_SHARP_MAX_OBJECTS; ++i)
         container.candidates[i] = detection[i];
     return detection.size();
@@ -238,7 +246,7 @@ LIB_API void Detector::free_image(image_t m)
     }
 }
 
-LIB_API std::vector<bbox_t> Detector::detect(image_t img, float thresh, bool use_mean)
+LIB_API std::vector<bbox_t> Detector::detect(image_t img, float thresh, bool use_mean, int frames_story, int max_dist)
 {
     detector_gpu_t &detector_gpu = *static_cast<detector_gpu_t *>(detector_gpu_ptr.get());
     network &net = detector_gpu.net;
@@ -323,7 +331,8 @@ LIB_API std::vector<bbox_t> Detector::detect(image_t img, float thresh, bool use
         cudaSetDevice(old_gpu_index);
 #endif
 
-    return bbox_vec;
+    return tracking_id(bbox_vec, true, frames_story, max_dist);
+    //return bbox_vec;
 }
 
 LIB_API std::vector<bbox_t> Detector::tracking_id(std::vector<bbox_t> cur_bbox_vec, bool const change_history,
